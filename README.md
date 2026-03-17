@@ -96,7 +96,7 @@ python -m pytest test/test_data_guard.py -v
 
 The Delta Table Writer gives you a single function that handles every write pattern you will need in a Databricks pipeline. Whether you are appending new records, overwriting a table completely, or merging updates into an existing dataset, the interface stays the same. You can also switch on audit columns — which automatically stamps every row with `DWHCreatedDate`, `DWHModifiedDate`, `DWHCreatedBy`, and `DWHModifiedBy` — and surrogate key generation, which adds a unique key to every row without you writing a single line of key logic.
 
-The write_mode parameter accepts append, overwrite, or upsert. For upsert, pass merge_on_key as a list of columns to merge on — the writer handles deduplication of incoming source rows automatically. Setting enable_audit=True adds the DWH audit columns on every write. Setting enable_surrogate_key=True generates a unique surrogate key column on the DataFrame before writing.
+The write_mode parameter accepts append, overwrite, upsert, SCD1 or SCD2. For upsert, pass merge_on_key as a list of columns to merge on — the writer handles deduplication of incoming source rows automatically. Setting enable_audit=True adds the DWH audit columns on every write. Setting enable_surrogate_key=True generates a unique surrogate key column on the DataFrame before writing.
 
 **Append method**
 ```python
@@ -136,6 +136,57 @@ write_table(
     write_mode="overwrite",
     enable_audit=True,
     enable_surrogate_key=True
+)
+```
+
+**SCD 1**
+
+In SCD Type 1 cases we only care about the latest version of a record and do not need to keep history. When a matching row already exists in the target table, its attributes are overwritten with the new values. When no match exists, a new row is inserted.
+
+```python
+from data_ops.delta_table_writer import write_table
+
+# SCD Type 1 – overwrite in place, no history
+write_table(
+    df=df,
+    target_table="catalog.schema.dim_customer",
+    write_mode="scd1",
+    merge_on_key=["customer_id"],  # business key
+    enable_audit=True,
+    enable_surrogate_key=True,
+)
+```
+
+**SCD 2**
+
+In SCD Type 2 is used when we need a full change history. Instead of overwriting existing rows, the writer keeps old versions and adds a new row every time a tracked attribute changes. The old row is marked as no longer current and the new row becomes the active one.
+
+In order to make SCD type 2 work we need:
+
+- A **business key** (for example, `customer_id`)
+- A **surrogate key** (for example, `customer_sk`)
+- An **effective_from** column (start date/time)
+- An **effective_to** column (end date/time, often `NULL` for the current row)
+- An **is_current** flag (for example, `IsCurrent = true/false`)
+
+the package uses following as the column name instead of ones listed above:
+
+- `DWHCreatedDate` corresponds to `effective_from`
+- `DWHModifiedDate` - additional audit column not mandatory for SCD 2
+- `DWHDeletedDate` corresponds to `effective_to`
+- `DWH_Isdeleted` corresponds to `is_current`
+
+```python
+from data_ops.delta_table_writer import write_table
+
+# SCD Type 2 – keep full history
+write_table(
+    df=df,
+    target_table="catalog.schema.dim_customer",
+    write_mode="scd2",
+    merge_on_key=["customer_id"],  # business key
+    enable_audit=True,
+    enable_surrogate_key=True,
 )
 ```
 
