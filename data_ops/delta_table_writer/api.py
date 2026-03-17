@@ -14,7 +14,8 @@ def write_table(
         write_mode: str = "append",
         enable_audit: bool = False,
         enable_surrogate_key: bool = False,
-        surrogate_key_col: str = "surrogate_key"
+        surrogate_key_col: str = "surrogate_key",
+        surrogate_key_strategy: str = "writer_generated"
     ) -> None:
 
     """
@@ -41,4 +42,5 @@ def write_table(
         enable_audit=enable_audit,
         enable_surrogate_key=enable_surrogate_key,
         surrogate_key_col=surrogate_key_col
+        surrogate_key_strategy=surrogate_key_strategy
     )

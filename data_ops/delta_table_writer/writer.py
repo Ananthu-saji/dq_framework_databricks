@@ -25,7 +25,8 @@ class DeltaWrite:
         write_mode: str = "append",
         enable_audit: bool = False,
         enable_surrogate_key: bool = False,
-        surrogate_key_col: str = "surrogate_key"
+        surrogate_key_col: str = "surrogate_key",
+        surrogate_key_strategy: Literal["table_generated", "writer_generated"] | None = None
     ) -> None:
         
         self._df = df
@@ -35,6 +36,7 @@ class DeltaWrite:
         self._enable_audit = enable_audit
         self._enable_surrogate_key = enable_surrogate_key
         self._surrogate_key_col = surrogate_key_col
+        self._surrogate_key_strategy = surrogate_key_strategy
         
 
 
@@ -68,11 +70,11 @@ class DeltaWrite:
 
 
         # create audit column if enabled
-        if self._enable_audit:
+        if self._enable_audit and self._write_mode != "scd2":
             self._df = create_audit_columns(self._df)
 
         # create surrogate key if enabled
-        if self._enable_surrogate_key:
+        if self._enable_surrogate_key and self._surrogate_key_strategy and self._surrogate_key_strategy.lower() == "writer_generated":
             self._df = create_surrogate_key(self.spark, self._df, self._target_table, self._surrogate_key_col)
 
          
@@ -83,6 +85,12 @@ class DeltaWrite:
             overwrite_data(self._df, self._target_table)
         elif self._write_mode == "upsert":
             merge_data(self.spark, self._df, self._target_table, self._merge_on_key)
+        elif self._write_mode == "scd1":
+            scd1(self.spark, self._df, self._target_table, self._merge_on_key)
+        elif self._write_mode == "scd2":
+            scd2(self.spark, self._df, self._target_table, self._merge_on_key) 
+        else:
+            raise ValueError("Invalid write mode. Valid values are append, overwrite and upsert")
 
 
 
